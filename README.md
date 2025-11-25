@@ -28,7 +28,7 @@ zxp2boriel --input <file.zxp> --width <pixels> --rows <rows> --cols <cols> --out
 Convert a 16x16 sprite sheet with 3 rows and 16 columns:
 
 ```bash
-zxp2boriel -i sprites.zxp -w 16 -r 3 -c 16 -o sprites.bas -n tiles
+zxp2boriel -i sprites.zxp -w 16 -r 3 -c 16 -o sprites.bas -n sprites
 ```
 
 This will generate a `sprites.bas` file containing:
