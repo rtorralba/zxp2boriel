@@ -9,23 +9,38 @@ import sys
 import os
 
 def read_zxp_file(filename):
-    """Reads the .zxp file and extracts sprite lines, skipping header."""
+    """Reads the .zxp file and extracts sprite lines and attribute lines."""
     try:
         with open(filename, 'r') as f:
             lines = f.readlines()
         
-        # Skip header (first 2 lines usually, but we filter by content)
-        # ZXP files often start with metadata lines like '0F' or '47' or dimensions
-        # We'll filter for lines that look like bitmap data (0s and 1s) or are part of the grid
-        # The original script skipped first 2 lines and filtered specific starts.
-        # We will follow a similar robust approach but try to be generic.
+        sprite_lines = []
+        attribute_lines = []
+        parsing_attributes = False
         
-        sprite_lines = [
-            line.strip() 
-            for line in lines[2:] 
-            if line.strip() and not line.startswith('0F') and not line.startswith('47')
-        ]
-        return sprite_lines
+        # Skip header (first 2 lines usually)
+        # We start looking from line 2
+        for line in lines[2:]:
+            stripped = line.strip()
+            if not stripped:
+                # Empty line usually signals start of attributes if we have processed sprites
+                if sprite_lines:
+                    parsing_attributes = True
+                continue
+            
+            if parsing_attributes:
+                attribute_lines.append(stripped)
+            else:
+                # Filter for bitmap data (0s and 1s)
+                # Some ZXP files might have other metadata, so we ensure it looks like bitmap
+                if all(c in '01' for c in stripped):
+                    sprite_lines.append(stripped)
+                elif ' ' in stripped and all(c in '0123456789ABCDEFabcdef ' for c in stripped):
+                     # Fallback: if we missed the blank line but see hex values
+                     parsing_attributes = True
+                     attribute_lines.append(stripped)
+
+        return sprite_lines, attribute_lines
     except Exception as e:
         print(f"Error reading file {filename}: {e}")
         sys.exit(1)
@@ -54,6 +69,49 @@ def extract_sprite(lines, row, col, width):
             sprite.append("0" * width)
     
     return sprite
+
+def parse_attributes(attribute_lines):
+    """Parses attribute lines into a single list of integer values."""
+    attributes = []
+    for line in attribute_lines:
+        parts = line.split()
+        for part in parts:
+            try:
+                attributes.append(int(part, 16))
+            except ValueError:
+                pass
+    return attributes
+
+def extract_sprite_attributes(attributes, row, col, sprite_width, total_cols_px):
+    """
+    Extracts attributes for a specific sprite.
+    attributes: flat list of all attribute values (row-major 8x8 blocks)
+    row: sprite grid row index
+    col: sprite grid col index
+    sprite_width: width of sprite in pixels
+    total_cols_px: total width of the image in pixels (inferred)
+    """
+    attr_data = []
+    
+    # Dimensions in 8x8 blocks
+    sprite_blocks = sprite_width // 8
+    total_blocks_width = total_cols_px // 8
+    
+    start_block_col = col * sprite_blocks
+    start_block_row = row * sprite_blocks
+    
+    for r in range(sprite_blocks):
+        for c in range(sprite_blocks):
+            # Calculate index in the flat attributes list
+            # The attributes are stored row by row of blocks
+            block_index = (start_block_row + r) * total_blocks_width + (start_block_col + c)
+            
+            if block_index < len(attributes):
+                attr_data.append(attributes[block_index])
+            else:
+                attr_data.append(0)
+                
+    return attr_data
 
 def bitmap_to_bytes(sprite, width):
     """
@@ -117,7 +175,8 @@ def main():
         print("Error: Width must be a multiple of 8.")
         sys.exit(1)
         
-    lines = read_zxp_file(args.input)
+    sprite_lines, attribute_lines = read_zxp_file(args.input)
+    attributes = parse_attributes(attribute_lines)
     
     # Calculate total size of one sprite in bytes
     total_bytes = (args.width // 8) * (args.width // 8) * 8
@@ -125,18 +184,32 @@ def main():
     
     total_sprites = args.rows * args.cols
     
+    # Infer total image width in pixels to help with attribute extraction
+    # We assume the input rows/cols describe the layout in the file
+    # But wait, args.rows and args.cols are usually passed by the user to define how many sprites to extract
+    # However, to correctly extract attributes from the linear list, we need to know the 'stride' of the original image.
+    # Usually ZXP exports the whole image width.
+    # Let's try to infer it from the length of the first sprite line.
+    
+    if sprite_lines:
+        image_width_px = len(sprite_lines[0])
+    else:
+        image_width_px = args.cols * args.width # Fallback
+        
+    
     with open(args.output, 'w') as f:
         f.write(f"' Generated by zxp2boriel.py\n")
         f.write(f"' Source: {os.path.basename(args.input)}\n")
         f.write(f"' Size: {args.width}x{args.width}\n")
         f.write(f"' Count: {total_sprites}\n\n")
         
+        # 1. Write Sprite Data
         f.write(f"Dim {args.name}({total_sprites - 1}, {total_bytes - 1}) As Ubyte => {{ _\n")
         
         count = 0
         for r in range(args.rows):
             for c in range(args.cols):
-                sprite = extract_sprite(lines, r, c, args.width)
+                sprite = extract_sprite(sprite_lines, r, c, args.width)
                 bytes_data = bitmap_to_bytes(sprite, args.width)
                 formatted_data = format_bytes(bytes_data)
                 
@@ -150,7 +223,34 @@ def main():
                 
                 count += 1
         
-        f.write(f"}}\n")
+        f.write(f"}}\n\n")
+        
+        # 2. Write Attribute Data
+        # Size of attributes per sprite = (W/8) * (W/8) bytes
+        attr_bytes_per_sprite = (args.width // 8) * (args.width // 8)
+        
+        if attributes:
+            f.write(f"Dim {args.name}_attr({total_sprites - 1}, {attr_bytes_per_sprite - 1}) As Ubyte => {{ _\n")
+            
+            count = 0
+            for r in range(args.rows):
+                for c in range(args.cols):
+                    attr_data = extract_sprite_attributes(attributes, r, c, args.width, image_width_px)
+                    formatted_attr = format_bytes(attr_data)
+                    
+                    f.write(f"\t{{ _\n")
+                    f.write(f"\t\t{formatted_attr} _\n")
+                    
+                    if count < total_sprites - 1:
+                        f.write(f"\t}}, _\n")
+                    else:
+                        f.write(f"\t}} _\n")
+                    
+                    count += 1
+            
+            f.write(f"}}\n")
+        else:
+            f.write(f"' No attributes found in source file\n")
                 
     print(f"Successfully generated {count} sprites in {args.output}")
 
