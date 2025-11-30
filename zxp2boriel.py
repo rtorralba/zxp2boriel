@@ -168,6 +168,7 @@ def main():
     parser.add_argument('--cols', '-c', type=int, required=True, help='Number of columns')
     parser.add_argument('--output', '-o', required=True, help='Output .bas file')
     parser.add_argument('--name', '-n', required=True, help='Variable name prefix')
+    parser.add_argument('--no-attributes', action='store_true', help='Do not export attributes')
     
     args = parser.parse_args()
     
@@ -229,7 +230,7 @@ def main():
         # Size of attributes per sprite = (W/8) * (W/8) bytes
         attr_bytes_per_sprite = (args.width // 8) * (args.width // 8)
         
-        if attributes:
+        if attributes and not args.no_attributes:
             f.write(f"Dim {args.name}_attr({total_sprites - 1}, {attr_bytes_per_sprite - 1}) As Ubyte => {{ _\n")
             
             count = 0
@@ -249,7 +250,7 @@ def main():
                     count += 1
             
             f.write(f"}}\n")
-        else:
+        elif not args.no_attributes:
             f.write(f"' No attributes found in source file\n")
                 
     print(f"Successfully generated {count} sprites in {args.output}")
