@@ -158,7 +158,12 @@ def format_bytes(bytes_data):
             line += ','
         lines.append(line)
     
-    return ' _\n\t\t'.join(lines)
+    return ' _\n\t'.join(lines)
+
+def format_bytes_inline(bytes_data):
+    """Formats bytes into hex strings for ZX BASIC in a single line."""
+    hex_strings = ['$' + format(b, '02X') for b in bytes_data]
+    return ','.join(hex_strings)
 
 def main():
     parser = argparse.ArgumentParser(description='Convert ZXP sprites to Boriel Basic.')
@@ -204,54 +209,35 @@ def main():
         f.write(f"' Size: {args.width}x{args.width}\n")
         f.write(f"' Count: {total_sprites}\n\n")
         
-        # 1. Write Sprite Data
-        f.write(f"Dim {args.name}({total_sprites - 1}, {total_bytes - 1}) As Ubyte => {{ _\n")
+        # Size of attributes per sprite = (W/8) * (W/8) bytes
+        attr_bytes_per_sprite = (args.width // 8) * (args.width // 8)
         
         count = 0
         for r in range(args.rows):
             for c in range(args.cols):
+                # 1. Write Sprite Data
                 sprite = extract_sprite(sprite_lines, r, c, args.width)
                 bytes_data = bitmap_to_bytes(sprite, args.width)
                 formatted_data = format_bytes(bytes_data)
                 
-                f.write(f"\t{{ _\n")
-                f.write(f"\t\t{formatted_data} _\n")
+                f.write(f"Dim {args.name}{count}({total_bytes - 1}) As Ubyte => {{ _\n")
+                f.write(f"\t{formatted_data} _\n")
+                f.write(f"}}\n")
                 
-                if count < total_sprites - 1:
-                    f.write(f"\t}}, _\n")
-                else:
-                    f.write(f"\t}} _\n")
+                # 2. Write Attribute Data
+                if attributes and not args.no_attributes:
+                    attr_data = extract_sprite_attributes(attributes, r, c, args.width, image_width_px)
+                    formatted_attr = format_bytes_inline(attr_data)
+                    
+                    f.write(f"Dim {args.name}Attr{count}({attr_bytes_per_sprite - 1}) As Ubyte => {{ {formatted_attr} }}\n")
+                
+                # Add blank line after each tile+attribute pair
+                f.write(f"\n")
                 
                 count += 1
-        
-        f.write(f"}}\n\n")
-        
-        # 2. Write Attribute Data
-        # Size of attributes per sprite = (W/8) * (W/8) bytes
-        attr_bytes_per_sprite = (args.width // 8) * (args.width // 8)
-        
-        if attributes and not args.no_attributes:
-            f.write(f"Dim {args.name}_attr({total_sprites - 1}, {attr_bytes_per_sprite - 1}) As Ubyte => {{ _\n")
-            
-            count = 0
-            for r in range(args.rows):
-                for c in range(args.cols):
-                    attr_data = extract_sprite_attributes(attributes, r, c, args.width, image_width_px)
-                    formatted_attr = format_bytes(attr_data)
-                    
-                    f.write(f"\t{{ _\n")
-                    f.write(f"\t\t{formatted_attr} _\n")
-                    
-                    if count < total_sprites - 1:
-                        f.write(f"\t}}, _\n")
-                    else:
-                        f.write(f"\t}} _\n")
-                    
-                    count += 1
-            
-            f.write(f"}}\n")
-        elif not args.no_attributes:
-            f.write(f"' No attributes found in source file\n")
+                
+        if not attributes and not args.no_attributes:
+             f.write(f"' No attributes found in source file\n")
                 
     print(f"Successfully generated {count} sprites in {args.output}")
 
