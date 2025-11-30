@@ -46,12 +46,12 @@ This will generate a `tileset.bas` file containing individual arrays for each ti
 Dim tile0(7) As Ubyte => { _
 	$00,$7E,$42,$5A,$00,$FF,$81,$81 _
 }
-Dim tile_attr0(0) As Ubyte => { $22 }
+Dim tileAttr0(0) As Ubyte => { $22 }
 
 Dim tile1(7) As Ubyte => { _
 	$00,$00,$00,$00,$00,$00,$00,$00 _
 }
-Dim tile_attr1(0) As Ubyte => { $22 }
+Dim tileAttr1(0) As Ubyte => { $22 }
 
 ...
 ```
@@ -59,7 +59,7 @@ Dim tile_attr1(0) As Ubyte => { $22 }
 ### Output Format
 
 - **Sprite Data**: Each sprite is exported as `{name}{index}` (e.g., `tile0`, `tile1`)
-- **Attributes**: Each sprite's attributes are exported as `{name}_attr{index}` (e.g., `tile_attr0`)
+- **Attributes**: Each sprite's attributes are exported as `{name}Attr{index}` (e.g., `tileAttr0`)
 - Attributes are formatted in a single line for better readability
 - Each sprite and its attributes are grouped together, separated from the next sprite by a blank line
 
