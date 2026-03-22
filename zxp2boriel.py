@@ -174,6 +174,7 @@ def main():
     parser.add_argument('--output', '-o', required=True, help='Output .bas file')
     parser.add_argument('--name', '-n', required=True, help='Variable name prefix')
     parser.add_argument('--no-attributes', action='store_true', help='Do not export attributes')
+    parser.add_argument('--matrix', action='store_true', help='Return tiles and attributes as matrices (rows x cols x bytes)')
     
     args = parser.parse_args()
     
@@ -211,30 +212,84 @@ def main():
         
         # Size of attributes per sprite = (W/8) * (W/8) bytes
         attr_bytes_per_sprite = (args.width // 8) * (args.width // 8)
-        
-        count = 0
-        for r in range(args.rows):
-            for c in range(args.cols):
-                # 1. Write Sprite Data
-                sprite = extract_sprite(sprite_lines, r, c, args.width)
-                bytes_data = bitmap_to_bytes(sprite, args.width)
-                formatted_data = format_bytes(bytes_data)
-                
-                f.write(f"Dim {args.name}{count}({total_bytes - 1}) As Ubyte => {{ _\n")
-                f.write(f"\t{formatted_data} _\n")
-                f.write(f"}}\n")
-                
-                # 2. Write Attribute Data
-                if attributes and not args.no_attributes:
-                    attr_data = extract_sprite_attributes(attributes, r, c, args.width, image_width_px)
-                    formatted_attr = format_bytes_inline(attr_data)
+
+        # total sprites counter (used for summary)
+        count = total_sprites
+
+        if args.matrix:
+            # Build flat lists in row-major order: one entry per sprite
+            flat_tiles = []
+            flat_attrs = []
+
+            for r in range(args.rows):
+                for c in range(args.cols):
+                    sprite = extract_sprite(sprite_lines, r, c, args.width)
+                    bytes_data = bitmap_to_bytes(sprite, args.width)
+                    flat_tiles.append(bytes_data)
+
+                    if attributes and not args.no_attributes:
+                        attr_data = extract_sprite_attributes(attributes, r, c, args.width, image_width_px)
+                        flat_attrs.append(attr_data)
+
+            # Write tiles as 2D array: sprite_index x total_bytes
+            f.write(f"' Tiles matrix: {total_sprites} x {total_bytes}\n")
+            f.write(f"Dim {args.name}Tiles({total_sprites - 1},{total_bytes - 1}) As Ubyte => {{ _\n")
+
+            for idx, tile_bytes in enumerate(flat_tiles):
+                # Multiline tile block using format_bytes for Boriel Basic continuation
+                formatted = format_bytes(tile_bytes).replace('\n\t', '\n\t\t')
+                f.write('\t{ _\n\t\t')
+                f.write(formatted)
+                f.write(' _\n\t}')
+                if idx < len(flat_tiles) - 1:
+                    f.write(', _\n')
+                else:
+                    # add continuation marker on the penultimate line before final closing brace
+                    f.write(' _\n')
+
+            f.write('}\n\n')
+
+            # Write attributes as 2D array if present
+            if attributes and not args.no_attributes:
+                f.write(f"' Attributes matrix: {total_sprites} x {attr_bytes_per_sprite}\n")
+                f.write(f"Dim {args.name}Attr({total_sprites - 1},{attr_bytes_per_sprite - 1}) As Ubyte => {{ _\n")
+
+                for idx, attr_bytes in enumerate(flat_attrs):
+                    # Write attributes in a compact single-line form
+                    inline = format_bytes_inline(attr_bytes)
+                    f.write(f'\t{{ {inline} }}')
+                    if idx < len(flat_attrs) - 1:
+                        f.write(', _\n')
+                    else:
+                        # add continuation marker on the penultimate line before final closing brace
+                        f.write(' _\n')
+
+                f.write('}\n\n')
+
+        else:
+            count = 0
+            for r in range(args.rows):
+                for c in range(args.cols):
+                    # 1. Write Sprite Data
+                    sprite = extract_sprite(sprite_lines, r, c, args.width)
+                    bytes_data = bitmap_to_bytes(sprite, args.width)
+                    formatted_data = format_bytes(bytes_data)
                     
-                    f.write(f"Dim {args.name}Attr{count}({attr_bytes_per_sprite - 1}) As Ubyte => {{ {formatted_attr} }}\n")
-                
-                # Add blank line after each tile+attribute pair
-                f.write(f"\n")
-                
-                count += 1
+                    f.write(f"Dim {args.name}{count}({total_bytes - 1}) As Ubyte => {{ _\n")
+                    f.write(f"\t{formatted_data} _\n")
+                    f.write(f"}}\n")
+                    
+                    # 2. Write Attribute Data
+                    if attributes and not args.no_attributes:
+                        attr_data = extract_sprite_attributes(attributes, r, c, args.width, image_width_px)
+                        formatted_attr = format_bytes_inline(attr_data)
+                        
+                        f.write(f"Dim {args.name}Attr{count}({attr_bytes_per_sprite - 1}) As Ubyte => {{ {formatted_attr} }}\n")
+                    
+                    # Add blank line after each tile+attribute pair
+                    f.write(f"\n")
+                    
+                    count += 1
                 
         if not attributes and not args.no_attributes:
              f.write(f"' No attributes found in source file\n")
