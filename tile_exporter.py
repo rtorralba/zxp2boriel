@@ -35,8 +35,8 @@ class TileExporter:
                     attr_data = self._extract_sprite_attributes(attributes, r, c, args.width, self.image_width_px)
                     flat_attrs.append(attr_data)
 
-        f.write(f"' Tiles matrix: {total_sprites} x {total_bytes}\n")
-        f.write(f"Dim {args.name}Tiles({total_sprites - 1},{total_bytes - 1}) As Ubyte => {{ _\n")
+        f.write(f"' {args.name} matrix: {total_sprites} x {total_bytes}\n")
+        f.write(f"Dim {args.name}({total_sprites - 1},{total_bytes - 1}) As Ubyte => {{ _\n")
 
         for idx, tile_bytes in enumerate(flat_tiles):
             formatted = self._format_bytes(tile_bytes).replace('\n\t', '\n\t\t')
