@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="zxp2boriel",
-    version="0.1.8",
+    version="0.1.9",
     author="Raül Torralba",
     author_email="raul.torralba@gmail.com",
     description="Convert ZX-Paintbrush (.zxp) files to Boriel Basic",

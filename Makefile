@@ -21,7 +21,7 @@ build: clean
 
 create-venv:
 	python3 -m venv venv
-	venv/bin/pip install --upgrade pip setuptools wheel twine
+	venv/bin/pip install --upgrade pip setuptools wheel twine pytest
 
 test-upload: build
 	venv/bin/twine upload --repository testpypi dist/*
@@ -34,3 +34,6 @@ install:
 
 dev-install:
 	pip install -e .
+
+test:
+	venv/bin/python -m pytest tests/
