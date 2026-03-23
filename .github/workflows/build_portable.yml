@@ -32,11 +32,11 @@ jobs:
           # Ensure we build from repo root and include both modules
           pyinstaller --onefile --name zxp2boriel zxp2boriel.py
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: zxp2boriel-${{ matrix.os }}
-          path: dist/**
+        - name: Upload artifacts
+          uses: actions/upload-artifact@v4
+          with:
+            name: zxp2boriel-${{ matrix.os }}
+            path: dist/**
 
     release:
       name: Create GitHub Release and attach artifacts
