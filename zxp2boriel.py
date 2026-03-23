@@ -7,6 +7,7 @@ Converts ZXP bitmap data to Boriel Basic DIM declarations.
 import argparse
 import sys
 import os
+from tile_exporter import TileExporter
 
 def read_zxp_file(filename):
     """Reads the .zxp file and extracts sprite lines and attribute lines."""
@@ -45,30 +46,7 @@ def read_zxp_file(filename):
         print(f"Error reading file {filename}: {e}")
         sys.exit(1)
 
-def extract_sprite(lines, row, col, width):
-    """
-    Extracts a sprite of size width x width from the grid.
-    row: grid row index
-    col: grid col index
-    width: width/height of the sprite in pixels
-    """
-    sprite = []
-    start_col = col * width
-    start_row = row * width
-    
-    for y in range(width):
-        if start_row + y < len(lines):
-            line = lines[start_row + y]
-            # Ensure line is long enough
-            if start_col + width <= len(line):
-                sprite_row = line[start_col:start_col + width]
-                sprite.append(sprite_row)
-            else:
-                sprite.append("0" * width)
-        else:
-            sprite.append("0" * width)
-    
-    return sprite
+# Sprite extraction and formatting helpers have been moved into TileExporter
 
 def parse_attributes(attribute_lines):
     """Parses attribute lines into a single list of integer values."""
@@ -82,88 +60,8 @@ def parse_attributes(attribute_lines):
                 pass
     return attributes
 
-def extract_sprite_attributes(attributes, row, col, sprite_width, total_cols_px):
-    """
-    Extracts attributes for a specific sprite.
-    attributes: flat list of all attribute values (row-major 8x8 blocks)
-    row: sprite grid row index
-    col: sprite grid col index
-    sprite_width: width of sprite in pixels
-    total_cols_px: total width of the image in pixels (inferred)
-    """
-    attr_data = []
-    
-    # Dimensions in 8x8 blocks
-    sprite_blocks = sprite_width // 8
-    total_blocks_width = total_cols_px // 8
-    
-    start_block_col = col * sprite_blocks
-    start_block_row = row * sprite_blocks
-    
-    for r in range(sprite_blocks):
-        for c in range(sprite_blocks):
-            # Calculate index in the flat attributes list
-            # The attributes are stored row by row of blocks
-            block_index = (start_block_row + r) * total_blocks_width + (start_block_col + c)
-            
-            if block_index < len(attributes):
-                attr_data.append(attributes[block_index])
-            else:
-                attr_data.append(0)
-                
-    return attr_data
+# Sprite extraction and formatting helpers have been moved into TileExporter
 
-def bitmap_to_bytes(sprite, width):
-    """
-    Converts a bitmap sprite to bytes in interleaved format for putChars.
-    Assumes width is a multiple of 8.
-    """
-    bytes_data = []
-    
-    chars_per_row = width // 8
-    chars_per_col = width // 8 # Square tiles
-    
-    # Iterate through character blocks (columns then rows)
-    # Note: The original script iterated col_block then row_block.
-    # We will stick to that order as it seems standard for this putChars routine.
-    
-    for col_block in range(chars_per_col):
-        for row_block in range(chars_per_row):
-            # 8 lines per character
-            for y_offset in range(8):
-                byte_val = 0
-                y = row_block * 8 + y_offset
-                
-                # 8 pixels per byte
-                for x_offset in range(8):
-                    x = col_block * 8 + x_offset
-                    
-                    if y < len(sprite) and x < len(sprite[y]):
-                        if sprite[y][x] == '1':
-                            byte_val |= (1 << (7 - x_offset))
-                            
-                bytes_data.append(byte_val)
-    
-    return bytes_data
-
-def format_bytes(bytes_data):
-    """Formats bytes into hex strings for ZX BASIC."""
-    hex_strings = ['$' + format(b, '02X') for b in bytes_data]
-    
-    # Split into lines of 8 bytes for readability
-    lines = []
-    for i in range(0, len(hex_strings), 8):
-        line = ','.join(hex_strings[i:i+8])
-        if i + 8 < len(hex_strings):
-            line += ','
-        lines.append(line)
-    
-    return ' _\n\t'.join(lines)
-
-def format_bytes_inline(bytes_data):
-    """Formats bytes into hex strings for ZX BASIC in a single line."""
-    hex_strings = ['$' + format(b, '02X') for b in bytes_data]
-    return ','.join(hex_strings)
 
 def main():
     parser = argparse.ArgumentParser(description='Convert ZXP sprites to Boriel Basic.')
@@ -216,81 +114,17 @@ def main():
         # total sprites counter (used for summary)
         count = total_sprites
 
+        
+
+        exporter = TileExporter(
+            f, args, total_bytes, attr_bytes_per_sprite, image_width_px, attributes, sprite_lines, total_sprites
+        )
+
         if args.matrix:
-            # Build flat lists in row-major order: one entry per sprite
-            flat_tiles = []
-            flat_attrs = []
-
-            for r in range(args.rows):
-                for c in range(args.cols):
-                    sprite = extract_sprite(sprite_lines, r, c, args.width)
-                    bytes_data = bitmap_to_bytes(sprite, args.width)
-                    flat_tiles.append(bytes_data)
-
-                    if attributes and not args.no_attributes:
-                        attr_data = extract_sprite_attributes(attributes, r, c, args.width, image_width_px)
-                        flat_attrs.append(attr_data)
-
-            # Write tiles as 2D array: sprite_index x total_bytes
-            f.write(f"' Tiles matrix: {total_sprites} x {total_bytes}\n")
-            f.write(f"Dim {args.name}Tiles({total_sprites - 1},{total_bytes - 1}) As Ubyte => {{ _\n")
-
-            for idx, tile_bytes in enumerate(flat_tiles):
-                # Multiline tile block using format_bytes for Boriel Basic continuation
-                formatted = format_bytes(tile_bytes).replace('\n\t', '\n\t\t')
-                f.write('\t{ _\n\t\t')
-                f.write(formatted)
-                f.write(' _\n\t}')
-                if idx < len(flat_tiles) - 1:
-                    f.write(', _\n')
-                else:
-                    # add continuation marker on the penultimate line before final closing brace
-                    f.write(' _\n')
-
-            f.write('}\n\n')
-
-            # Write attributes as 2D array if present
-            if attributes and not args.no_attributes:
-                f.write(f"' Attributes matrix: {total_sprites} x {attr_bytes_per_sprite}\n")
-                f.write(f"Dim {args.name}Attr({total_sprites - 1},{attr_bytes_per_sprite - 1}) As Ubyte => {{ _\n")
-
-                for idx, attr_bytes in enumerate(flat_attrs):
-                    # Write attributes in a compact single-line form
-                    inline = format_bytes_inline(attr_bytes)
-                    f.write(f'\t{{ {inline} }}')
-                    if idx < len(flat_attrs) - 1:
-                        f.write(', _\n')
-                    else:
-                        # add continuation marker on the penultimate line before final closing brace
-                        f.write(' _\n')
-
-                f.write('}\n\n')
-
+            exporter.write_matrix()
         else:
-            count = 0
-            for r in range(args.rows):
-                for c in range(args.cols):
-                    # 1. Write Sprite Data
-                    sprite = extract_sprite(sprite_lines, r, c, args.width)
-                    bytes_data = bitmap_to_bytes(sprite, args.width)
-                    formatted_data = format_bytes(bytes_data)
-                    
-                    f.write(f"Dim {args.name}{count}({total_bytes - 1}) As Ubyte => {{ _\n")
-                    f.write(f"\t{formatted_data} _\n")
-                    f.write(f"}}\n")
-                    
-                    # 2. Write Attribute Data
-                    if attributes and not args.no_attributes:
-                        attr_data = extract_sprite_attributes(attributes, r, c, args.width, image_width_px)
-                        formatted_attr = format_bytes_inline(attr_data)
-                        
-                        f.write(f"Dim {args.name}Attr{count}({attr_bytes_per_sprite - 1}) As Ubyte => {{ {formatted_attr} }}\n")
-                    
-                    # Add blank line after each tile+attribute pair
-                    f.write(f"\n")
-                    
-                    count += 1
-                
+            exporter.write_flat()
+
         if not attributes and not args.no_attributes:
              f.write(f"' No attributes found in source file\n")
                 
