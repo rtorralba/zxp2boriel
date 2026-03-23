@@ -17,11 +17,11 @@ clean:
 	find . -type f -name '*.pyc' -delete
 
 build: clean
-	venv/bin/python setup.py sdist bdist_wheel
+	venv/bin/python -m build
 
 create-venv:
 	python3 -m venv venv
-	venv/bin/pip install --upgrade pip setuptools wheel twine pytest
+	venv/bin/pip install --upgrade pip setuptools wheel build twine pytest
 
 test-upload: build
 	venv/bin/twine upload --repository testpypi dist/*
