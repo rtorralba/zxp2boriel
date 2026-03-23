@@ -1,0 +1,10 @@
+#!/bin/sh
+echo "Running tests before push..."
+python -m pytest -q
+RC=$?
+if [ $RC -ne 0 ]; then
+  echo "Tests failed. Push aborted."
+  exit $RC
+fi
+echo "Tests passed. Proceeding with push."
+exit 0
