@@ -32,17 +32,8 @@ jobs:
           # Ensure we build from repo root and include both modules
           pyinstaller --onefile --name zxp2boriel zxp2boriel.py
 
-      - name: Package artifact
-        run: |
-          mkdir -p out
-          if [ "${{ matrix.os }}" = "windows-latest" ]; then 
-            cp dist\zxp2boriel.exe out/ || true
-          else
-            cp dist/zxp2boriel out/ || true
-          fi
-
-      - name: Upload artifact
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: zxp2boriel-${{ matrix.os }}
-          path: out
+          path: dist/**
