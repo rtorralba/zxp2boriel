@@ -29,7 +29,6 @@ jobs:
 
       - name: Build single-file executable
         run: |
-          # Ensure we build from repo root and include both modules
           pyinstaller --onefile --name zxp2boriel zxp2boriel.py
 
       - name: Upload artifacts
@@ -38,57 +37,57 @@ jobs:
           name: zxp2boriel-${{ matrix.os }}
           path: dist/**
 
-    release:
-      name: Create GitHub Release and attach artifacts
-      needs: build
-      runs-on: ubuntu-latest
-      if: startsWith(github.ref, 'refs/tags/')
-      steps:
-        - name: Download Linux artifact
-          uses: actions/download-artifact@v4
-          with:
-            name: zxp2boriel-ubuntu-latest
-            path: artifacts/ubuntu
+  release:
+    name: Create GitHub Release and attach artifacts
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: zxp2boriel-ubuntu-latest
+          path: artifacts/ubuntu
 
-        - name: Download Windows artifact
-          uses: actions/download-artifact@v4
-          with:
-            name: zxp2boriel-windows-latest
-            path: artifacts/windows
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: zxp2boriel-windows-latest
+          path: artifacts/windows
 
-        - name: Download macOS artifact
-          uses: actions/download-artifact@v4
-          with:
-            name: zxp2boriel-macos-latest
-            path: artifacts/macos
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: zxp2boriel-macos-latest
+          path: artifacts/macos
 
-        - name: List downloaded artifacts
-          run: |
-            ls -R artifacts || true
+      - name: List downloaded artifacts
+        run: |
+          ls -R artifacts || true
 
-        - name: Create GitHub Release
-          id: create_release
-          uses: actions/create-release@v1
-          with:
-            tag_name: ${{ github.ref_name }}
-            release_name: Release ${{ github.ref_name }}
-            body: "Automated release with portable executables"
-            draft: false
-            prerelease: false
-          env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          release_name: Release ${{ github.ref_name }}
+          body: Automated release with portable executables
+          draft: false
+          prerelease: false
 
-        - name: Upload release assets
-          env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-            REPO: ${{ github.repository }}
-            RELEASE_ID: ${{ steps.create_release.outputs.id }}
-          run: |
-            set -e
-            echo "Uploading files to release $RELEASE_ID in $REPO"
-            for f in artifacts/*/dist/*; do
-              [ -f "$f" ] || continue
-              name=$(basename "$f")
-              echo "Uploading $f as $name"
-              curl -sS -X POST -H "Authorization: token $GITHUB_TOKEN" -H "Content-Type: application/octet-stream" --data-binary @"$f" "https://uploads.github.com/repos/$REPO/releases/$RELEASE_ID/assets?name=$name"
-            done
+      - name: Upload release assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          RELEASE_ID: ${{ steps.create_release.outputs.id }}
+        run: |
+          set -e
+          echo "Uploading files to release $RELEASE_ID in $REPO"
+          for f in artifacts/*/dist/*; do
+            [ -f "$f" ] || continue
+            name=$(basename "$f")
+            echo "Uploading $f as $name"
+            curl -sS -X POST -H "Authorization: token $GITHUB_TOKEN" -H "Content-Type: application/octet-stream" --data-binary @"$f" "https://uploads.github.com/repos/$REPO/releases/$RELEASE_ID/assets?name=$name"
+          done
