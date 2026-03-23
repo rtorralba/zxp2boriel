@@ -69,10 +69,8 @@ jobs:
           ls -R artifacts || true
 
       - name: Create GitHub Release and upload assets
-        uses: ncipollo/release-action@v1
+        uses: softprops/action-gh-release@v1
         with:
-          tag: ${{ github.ref_name }}
-          name: Release ${{ github.ref_name }}
-          body: Automated release with portable executables
           files: artifacts/**
-          token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
