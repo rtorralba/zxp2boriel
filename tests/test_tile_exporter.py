@@ -22,7 +22,7 @@ def test_write_matrix_single_tile():
     exporter.write_matrix()
     out = f.getvalue()
 
-    assert "Dim TTiles(0,7) As Ubyte" in out
+    assert "Dim T(0,7) As Ubyte" in out
     # hex for 0 should appear
     assert "$00" in out
     # attribute inline value present
